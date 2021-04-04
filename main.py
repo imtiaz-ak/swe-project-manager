@@ -20,7 +20,7 @@ async def commands(ctx):
     await ctx.send(command_text)
 
 @bot.command()
-async def start(ctx, project_name, *args):
+async def create(ctx, project_name, *args):
     for repo in args:
         #ask for the link of the repos. carry out a convo here.
         pass
@@ -65,6 +65,11 @@ async def issues(ctx, project_name, state='todo', discord_username=None):
             await ctx.send("showing all the issues from project {} with state done assigned to user {}".format(project_name, discord_username))    
         await ctx.send("showing all the issues from project {} with state done".format(project_name, state))
     
+
+@bot.command()
+async def connect(ctx, project_name, story_id, issue_id):
+    await ctx.send("connected story with id {} to issue with id {} from the project {}".format(project_name, story_id, issue_id))
+
 @bot.command()
 async def assign(ctx, discord_username, issue_id):
     await ctx.send("assigned user {} to issue with id {}".format(discord_username, issue_id))

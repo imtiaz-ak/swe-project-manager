@@ -9,7 +9,7 @@ command_text = """
     > use prefix .
     > 
     > **Starting a project:**
-    > .start <projectname> <repo1> <repo2> ....
+    > .create <projectname> <repo1> <repo2> ....
     > enter the name of all the repos for the project you're creating.
     > 
     > **Adding developers to projects:**
@@ -27,6 +27,9 @@ command_text = """
     > .issues <projectname> doing -> View all the issues for project with status doing
     > .issues <projectname> done -> View all the issues for project with status done
     > .issues <projectname> <status> <discord username> -> Shows issues assigned to that developer
+    > 
+    > **Connecting trello story to github's issues:**
+    > .connect <projectname> <story_id> <issue_id> -> Connects the issue on github with the story on trello
     > 
     > **Assign developer to issue:**
     > .assign <discord username> <issue id>
