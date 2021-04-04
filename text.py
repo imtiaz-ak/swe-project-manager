@@ -9,8 +9,8 @@ command_text = """
     > use prefix .
     > 
     > **Starting a project:**
-    > .create <projectname> <repo1> <repo2> ....
-    > enter the name of all the repos for the project you're creating.
+    > .create <projectname> <repo1 link> <repo2 link> .... <github token>
+    > enter the url of all the repos for the project you're creating with an account's github token at the end
     > 
     > **Adding developers to projects:**
     > .add <projectname> <developer's discord username> <developer's github username>.
