@@ -15,6 +15,9 @@ command_text = """
     > **Adding developers to projects:**
     > .add <projectname> <developer's discord username> <developer's github username>.
     > 
+    > **Connecting trello board to project:**
+    > .trello <projectname> <trello board url> <trello token>
+    > 
     > **Managing trello board's stories:**
     > .stories <projectname> -> View all stories for particular project
     > .stories <projectname> todo -> View all the stories for project with status todo

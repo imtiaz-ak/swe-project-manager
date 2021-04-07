@@ -2,7 +2,57 @@ import os
 import discord
 from discord.ext import commands
 from text import command_text, help_text
+from github_helpers import *
+from trello_helpers import *
 from keep_alive import keep_alive
+
+from sqlalchemy import *
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker,relationship
+
+engine = create_engine('sqlite:///data.db', echo=True)
+session = sessionmaker(bind=engine)()
+
+Base = declarative_base()
+
+class Project(Base):
+    __tablename__ = 'project'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    github_token = Column(String)
+    trello_url = Column(String)
+    trello_token = Column(String)
+    repositories = relationship('Repository', back_populates='project', cascade='all, delete')
+
+    def __init__(self, name, github_token, trello_url=None, trello_token=None):
+        self.name = name
+        self.github_token = github_token
+        self.trello_url = trello_url
+        self.trello_token = trello_token
+
+class Repository(Base):
+    __tablename__ = 'repository'
+
+    id = Column(Integer, primary_key=True)
+    url = Column(String)
+    project_id = Column(Integer, ForeignKey('project.id'))
+    project = relationship('Project', back_populates='repositories')
+
+    def __init__(self, url, project):
+        self.url = url
+        self.project = project
+        self.project_id = project.id
+
+class Developer(Base):
+    __tablename__ = 'developer'
+
+    id = Column(Integer, primary_key=True)
+    discord_username = Column(String)
+    github_username = Column(String)
+
+        
+Base.metadata.create_all(engine)
 
 bot = commands.Bot(command_prefix='.')
 bot.remove_command('help')
@@ -21,15 +71,49 @@ async def commands(ctx):
 
 @bot.command()
 async def create(ctx, project_name, *args):
+    repo_list = []
+    no_error = True
+
     for repo in args:
-        #ask for the link of the repos. carry out a convo here.
-        pass
+
+        # if its the last arg, its the token
+        if repo == args[-1]:
+            if not github_token_is_valid(repo):
+                await ctx.send("Please enter a valid github token. Use the .commands to view the correct format.")
+                break
+        else:
+            # otherwise, its a github repo link
+            if github_repo_is_valid(repo):
+                repo_list.append(repo)
+            else:
+                await ctx.send("Please enter valid github repository urls. Use the .commands to view the correct format.")
+                break
+    
+    if no_error:
+        # add the project info in the database
+        project = Project(name=project_name, github_token=args[-1])
+        session.add(project)
         
-    await ctx.send("creating project")
+        # add the info for each repo into the database
+        for repo in repo_list:
+            repository = Repository(url=repo, project=project)
+            session.add(project)
+
+        session.commit()
+        await ctx.send("Added project '{}' with the given repository urls.".format(project_name))
 
 @bot.command()
-async def add(ctx, project_name, discord_username, gitlab_username):
-    await ctx.send("adding user {} with gitlab username {} to project {}".format(discord_username, gitlab_username, project_name))
+async def add(ctx, project_name, discord_username, github_username):
+    if discord_username_exists(discord_username) and github_username_exists(github_username):
+        # check if any project with the same name exists or not
+        await ctx.send("Adding user {} with github username {} to project {}".format(discord_username, gitlab_username, project_name))
+    else:
+        await ctx.send("Could not add the user to the project '{}'. Please check if you've properly typed both the discord username and github username. Use .commands to view all the commands.".format(project_name))
+
+
+@bot.command()
+async def trello(ctx, project_name, trello_url, trello_token):
+    pass
 
 @bot.command()
 async def stories(ctx, project_name, state='todo'):
