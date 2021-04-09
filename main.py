@@ -1,65 +1,29 @@
+# Turn off bytecode generation
+import sys
+
+sys.dont_write_bytecode = True
+
+# Django specific settings
+import os
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+import django
+
+django.setup()
+
+# Import your models for use in your script
+from db.models import *
+from asgiref.sync import sync_to_async
+
+# Code for discord bot starts here
 import os
 import discord
 from discord.ext import commands
-from text import command_text, help_text
-from github_helpers import *
-from trello_helpers import *
-from keep_alive import keep_alive
-
-from sqlalchemy import *
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker,relationship
-
-engine = create_engine('sqlite:///data.db', echo=True)
-session = sessionmaker(bind=engine)()
-
-Base = declarative_base()
-
-class Project(Base):
-    __tablename__ = 'project'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    server_id = Column(String)
-    github_token = Column(String)
-    trello_url = Column(String)
-    trello_token = Column(String)
-    repositories = relationship('Repository', back_populates='project', cascade='all, delete')
-
-    def __init__(self, name, server_id, github_token, trello_url=None, trello_token=None):
-        self.name = name
-        self.server_id = server_id
-        self.github_token = github_token
-        self.trello_url = trello_url
-        self.trello_token = trello_token
-
-class Repository(Base):
-    __tablename__ = 'repository'
-
-    id = Column(Integer, primary_key=True)
-    url = Column(String)
-    project_id = Column(Integer, ForeignKey('project.id'))
-    project = relationship('Project', back_populates='repositories')
-
-    def __init__(self, url, project):
-        self.url = url
-        self.project = project
-        self.project_id = project.id
-
-class Developer(Base):
-    __tablename__ = 'developer'
-
-    id = Column(Integer, primary_key=True)
-    discord_username = Column(String)
-    github_username = Column(String)
-
-
-class DeveloperOnProject(Base):
-    __tablename__ = 'developer_on_project'
-
-    id = Column(Integer, primary_key=True)
-
-Base.metadata.create_all(engine)
+from utils.text import command_text, help_text
+from utils.github_helpers import *
+from utils.trello_helpers import *
+from utils.discord_helpers import *
+from utils.keep_alive import keep_alive
 
 bot = commands.Bot(command_prefix='.')
 bot.remove_command('help')
@@ -100,15 +64,12 @@ async def create(ctx, project_name, *args):
         # get the server id
         # add the project info in the database
         server_id = ctx.message.guild.id
-        project = Project(name=project_name, server_id=server_id, github_token=args[-1])
-        session.add(project)
+        project_obj = Project.objects.create(name=project_name, server_id=server_id, github_token=args[-1])
         
         # add the info for each repo into the database
         for repo in repo_list:
-            repository = Repository(url=repo, project=project)
-            session.add(project)
+            Repository.objects.create(url=repo, project_obj=project_obj)
 
-        session.commit()
         await ctx.send("Added project '{}' with the given repository urls.".format(project_name))
 
 @bot.command()
@@ -116,34 +77,82 @@ async def projects(ctx, project_name=None, *args):
     server_id = ctx.message.guild.id
     if project_name is None:
         # show all the projects in this server
-        projects = session.query(Project).filter(Project.server_id == server_id)
-        return_string = ""
-        for p in projects:
-            return_string += "{}\n".format(p.name)
-        await ctx.send(return_string)
-    
+        projects = Project.objects.filter(server_id=server_id)
+        
+        if projects.exists():
+            return_string = ""
+            for p in projects:
+                return_string += "{}\n".format(p.name)
+            await ctx.send(return_string)
+        else:
+            await ctx.send("No projects available in this server.")
+
     else:
         # show the project with the right name from this server
-        project = session.query(Project).filter(and_(Project.server_id==server_id, Project.name==project_name))
-        if len(args) == 0:
-            await ctx.send(project[0].name)
-        elif args[0] == 'delete':
-            session.delete(project[0])
-            await ctx.send("Project '{}' has been deleted.".format(project_name))
+        project_obj = Project.objects.filter(server_id=server_id, name=project_name)
+
+        if not project_obj.exists():
+            await ctx.send("No project with name '{}' exists in this server.".format(project_name))
+
+        else:
+            project_obj = Project.objects.get(server_id=server_id, name=project_name)
+            if len(args) == 0:
+                return_string = "Project Name: {}.\nThe developers on this project are:\n".format(project_name)
+                for dev in DeveloperOnProject.objects.filter(project_obj=project_obj):
+                    return_string += str(dev.developer_obj.github_username)
+                await ctx.send(return_string)
+
+            elif args[0] == 'delete':
+                project_obj.delete()
+                await ctx.send("Project '{}' has been deleted.".format(pr.nameoject_name))
 
 
 @bot.command()
 async def add(ctx, project_name, discord_username, github_username):
+    server_id = ctx.message.guild.id
     if discord_username_exists(discord_username) and github_username_exists(github_username):
-        # check if any project with the same name exists or not
-        await ctx.send("Adding user {} with github username {} to project {}".format(discord_username, gitlab_username, project_name))
+        # get or create the develoepr
+        developer_obj, created = Developer.objects.get_or_create(discord_username=discord_username, server_id=server_id)
+        if created:
+            developer_obj.github_username = github_username
+            developer_obj.save() 
+        
+        # check if the project exists or not
+        project = Project.objects.filter(name=project_name, server_id=server_id)
+        if not project.exists():
+            await ctx.send("Project with name {} does not exist.".format(project_name))
+
+        # check if the user is already added to the project or not
+        else:
+            developer_already_added = DeveloperOnProject.objects.filter(project_obj=project.first(), developer_obj=developer_obj)
+            if developer_already_added:
+                await ctx.send("This developer has been already added to this project.")
+            else:
+                DeveloperOnProject.objects.create(project_obj=project.first(), developer_obj=developer_obj)
+                await ctx.send("Adding user {} with github username {} to project {}".format(discord_username, github_username, project_name))
     else:
         await ctx.send("Could not add the user to the project '{}'. Please check if you've properly typed both the discord username and github username. Use .commands to view all the commands.".format(project_name))
 
 
 @bot.command()
 async def trello(ctx, project_name, trello_url, trello_token):
-    pass
+    server_id = ctx.message.guild.id
+    if can_access_trello_board(trello_url, trello_token):
+        # check if project already has a trello attached or not
+        project = Project.objects.filter(server_id=server_id, project_name=project_name)
+        if not project.exists():
+            await ctx.send("Project with given name does not exist in this server.")
+        else:
+            if not project.first().trello_url == "":
+                await ctx.send("Project already has a trello board added to it.")
+            else:
+                project_obj = project.first()
+                project_obj.trello_url = trello_url
+                project_obj.trello_token = trello_token
+                project_obj.save()
+                await ctx.send("Given trello board has been added to the project '{}'.".format(project_obj.name))
+    else:
+        await ctx.send("Can't add the trello board. Please check if the url and token are correct or not. Type .commands to view the full command list.")
 
 @bot.command()
 async def stories(ctx, project_name, state='todo'):
