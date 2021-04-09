@@ -20,13 +20,15 @@ class Project(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    server_id = Column(String)
     github_token = Column(String)
     trello_url = Column(String)
     trello_token = Column(String)
     repositories = relationship('Repository', back_populates='project', cascade='all, delete')
 
-    def __init__(self, name, github_token, trello_url=None, trello_token=None):
+    def __init__(self, name, server_id, github_token, trello_url=None, trello_token=None):
         self.name = name
+        self.server_id = server_id
         self.github_token = github_token
         self.trello_url = trello_url
         self.trello_token = trello_token
@@ -51,7 +53,12 @@ class Developer(Base):
     discord_username = Column(String)
     github_username = Column(String)
 
-        
+
+class DeveloperOnProject(Base):
+    __tablename__ = 'developer_on_project'
+
+    id = Column(Integer, primary_key=True)
+
 Base.metadata.create_all(engine)
 
 bot = commands.Bot(command_prefix='.')
@@ -90,8 +97,10 @@ async def create(ctx, project_name, *args):
                 break
     
     if no_error:
+        # get the server id
         # add the project info in the database
-        project = Project(name=project_name, github_token=args[-1])
+        server_id = ctx.message.guild.id
+        project = Project(name=project_name, server_id=server_id, github_token=args[-1])
         session.add(project)
         
         # add the info for each repo into the database
@@ -101,6 +110,27 @@ async def create(ctx, project_name, *args):
 
         session.commit()
         await ctx.send("Added project '{}' with the given repository urls.".format(project_name))
+
+@bot.command()
+async def projects(ctx, project_name=None, *args):
+    server_id = ctx.message.guild.id
+    if project_name is None:
+        # show all the projects in this server
+        projects = session.query(Project).filter(Project.server_id == server_id)
+        return_string = ""
+        for p in projects:
+            return_string += "{}\n".format(p.name)
+        await ctx.send(return_string)
+    
+    else:
+        # show the project with the right name from this server
+        project = session.query(Project).filter(and_(Project.server_id==server_id, Project.name==project_name))
+        if len(args) == 0:
+            await ctx.send(project[0].name)
+        elif args[0] == 'delete':
+            session.delete(project[0])
+            await ctx.send("Project '{}' has been deleted.".format(project_name))
+
 
 @bot.command()
 async def add(ctx, project_name, discord_username, github_username):

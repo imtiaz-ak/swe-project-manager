@@ -1,16 +1,20 @@
 help_text = """
-```type .commands for all the commands
+```two-face is a project management bot that makes it easier for teams of developers and business people to collaborate on a project. It tries to solve the communication gap between the two by letting both groups speak their own language on two different platforms (github & trello) and connects the two platforms.
+
+type .commands for all the commands
 
 public github repository: https://github.com/imtiaz-ak/swe-project-manager/```
 """
 
 command_text = """
-    > **Prefix:**
-    > use prefix .
-    > 
     > **Starting a project:**
     > .create <projectname> <repo1 link> <repo2 link> .... <github token>
     > enter the url of all the repos for the project you're creating with an account's github token at the end
+    > 
+    > **View and delete projects:**
+    > .projects --> shows all the proojects in this server
+    > .projects <projectname> --> shows info about the particular project
+    > .project <projectname> delete --> deletes the particular project
     > 
     > **Adding developers to projects:**
     > .add <projectname> <developer's discord username> <developer's github username>.
